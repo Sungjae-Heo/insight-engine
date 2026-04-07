@@ -7,6 +7,7 @@ import os
 
 from flask import Blueprint, request, jsonify, g
 from utils.responses import success_response, error_response, sanitize_error_for_client
+from utils.security import validate_pagination
 from services.data.supabase_service import (
     get_supabase, is_supabase_enabled, require_auth,
     save_api_keys, get_api_keys,
@@ -409,8 +410,7 @@ def get_user_history():
         page: 페이지 번호 (기본값: 1)
         per_page: 페이지당 항목 수 (기본값: 20)
     """
-    page = max(1, request.args.get('page', 1, type=int))
-    per_page = min(100, max(1, request.args.get('per_page', 20, type=int)))
+    page, per_page = validate_pagination()
 
     data = get_histories(g.user_id, page, per_page)
     histories = data.get('histories', [])
@@ -632,8 +632,7 @@ def get_admin_contents():
     if error:
         return error
 
-    page = max(1, request.args.get('page', 1, type=int))
-    per_page = min(100, max(1, request.args.get('per_page', 20, type=int)))
+    page, per_page = validate_pagination()
     user_id = request.args.get('user_id', None, type=str)
 
     result = get_all_contents(page, per_page, user_id)

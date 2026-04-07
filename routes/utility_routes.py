@@ -1,13 +1,11 @@
 """
 유틸리티 라우트 — 헬스체크, 프로바이더, 캐시, 스타일 추천/생성, 웹훅, 재생목록
 """
-import ipaddress
 import json
 import os
 import threading
 import time
 from typing import Dict
-from urllib.parse import urlparse
 
 from flask import request, jsonify, current_app
 
@@ -18,6 +16,7 @@ from services.data.supabase_service import require_auth
 from services.usage import require_usage
 from services.platform.webhook_service import WebhookService
 from utils.responses import handle_error, sanitize_error_for_client
+from utils.security import is_safe_url
 
 _CLIENT_TRACKER: Dict[str, float] = {}
 
@@ -209,23 +208,6 @@ def api_ollama_health():
         return jsonify({'ok': False, 'error': sanitize_error_for_client(str(e)), 'base_url': base_url}), 503
 
 
-def _is_safe_url(url: str) -> bool:
-    """프라이빗/루프백 IP로의 요청을 차단합니다 (SSRF 방지). localhost는 허용."""
-    try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-        if hostname in ('localhost', '127.0.0.1', '::1'):
-            return True
-        ip = ipaddress.ip_address(hostname)
-        if ip.is_private or ip.is_link_local:
-            return False
-        return True
-    except ValueError:
-        return True
-
-
 @blog_bp.route('/api/providers/validate', methods=['POST'])
 def api_validate_provider():
     """API 키를 소량 토큰 호출로 유효성 테스트합니다."""
@@ -252,7 +234,7 @@ def api_validate_provider():
     if provider_id == 'ollama':
         import requests as http_requests
         base_url = api_key or provider.get('api_base', 'http://localhost:11434')
-        if not _is_safe_url(base_url):
+        if not is_safe_url(base_url):
             return jsonify({'valid': False, 'error': '허용되지 않는 URL입니다.'}), 400
         try:
             t0 = time.time()

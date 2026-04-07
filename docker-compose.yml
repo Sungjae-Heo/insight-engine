@@ -16,11 +16,20 @@ services:
     image: insight-engine-backend:latest
     container_name: insight-backend
     restart: unless-stopped
-    command: ["python", "app.py"]
+    command: >
+      gunicorn app:app
+      --bind 0.0.0.0:5001
+      --workers ${GUNICORN_WORKERS:-2}
+      --threads ${GUNICORN_THREADS:-4}
+      --timeout ${GUNICORN_TIMEOUT:-120}
+      --preload
     ports:
       - "5001:5001"
     environment:
       - FLASK_ENV=${FLASK_ENV:-production}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      - GUNICORN_THREADS=${GUNICORN_THREADS:-4}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-120}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - ZHIPUAI_API_KEY=${ZHIPUAI_API_KEY}

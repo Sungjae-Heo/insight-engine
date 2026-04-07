@@ -17,7 +17,6 @@
 import concurrent.futures
 import html as html_lib
 import json
-import re
 import time
 import uuid
 
@@ -32,6 +31,7 @@ from services.data.supabase_service import (
 )
 from services.usage import require_usage
 from services.usage.usage_decorator import get_usage_for_response
+from utils.security import is_prompt_injection
 
 blog_bp = Blueprint('blog', __name__)
 
@@ -201,13 +201,6 @@ def _validate_modifiers(modifiers):
     return validated, None
 
 
-_INJECTION_PATTERNS = re.compile(
-    r'(이전\s*지시를?\s*무시|ignore\s+previous\s+instructions?|'
-    r'system\s*prompt|you\s+are\s+now|forget\s+(everything|all)|'
-    r'disregard\s+(all|previous)|override\s+instructions?)',
-    re.IGNORECASE
-)
-
 def _validate_custom_prompt(custom_prompt):
     """customPrompt 파라미터의 유효성을 검증합니다.
 
@@ -221,7 +214,7 @@ def _validate_custom_prompt(custom_prompt):
         return None, 'customPrompt는 문자열이어야 합니다.'
 
     trimmed = custom_prompt.strip()[:2000]
-    if _INJECTION_PATTERNS.search(trimmed):
+    if is_prompt_injection(trimmed):
         return None, '허용되지 않는 표현이 포함되어 있습니다.'
     return trimmed, None
 

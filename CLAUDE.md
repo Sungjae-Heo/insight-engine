@@ -420,3 +420,49 @@ SELECT decrement_usage_safe('user-uuid');
 - 제거된 엔드포인트: `/api/arxiv/*`, `/api/health/detailed`, `/api/github/readme`, `/api/styles`, `/api/cache/stats`, `/api/cache/purge`, `/api/content/stats`, `/api/version`, `/api/prompts/info`, `/api/rate-limit/status`, `/api/admin/system-info`
 - 제거된 함수: `get_citation_stats`, `generate_numbered_toc`, `generate_ab_hooks`, `suggest_fixes`, `get_citation_density_grade`, `generate_themed_card`, `shuffle_quiz`, `generate_mixed_difficulty_quiz`, `analyze_debate_balance`
 - 이 엔드포인트/함수를 다시 추가하려면 프론트엔드 소비 코드도 함께 작성할 것
+
+## Git 커밋 규칙
+
+### autoresearch 커밋 정리
+- autoresearch는 **feature branch**에서 실행
+- merge 시 `--squash`로 압축: `autoresearch R142~R176: 35건 자율 개선`
+- main/master에 직접 자율 커밋 금지
+
+### feat:test 비율
+- 새 기능(`feat`) 추가 시 대응하는 테스트 커밋 필수
+- 목표 비율: feat 1건당 test 1건 이상
+- 테스트 없는 feat은 리뷰에서 차단
+
+### 커밋 메시지 컨벤션
+- 타입: `feat`, `fix`, `refactor`, `test`, `perf`, `docs`, `chore`
+- 형식: `타입: 한줄 요약 (50자 이내)`
+- 본문: 왜(Why) 중심, 무엇(What)은 코드가 말함
+
+## 새 라우트 추가 체크리스트
+
+새 Flask 라우트(`@bp.route(...)`) 추가 시 반드시 확인:
+
+| 항목 | 확인 |
+|------|------|
+| `@require_auth` 또는 `@optional_auth` 데코레이터 | 인증 불필요 사유 명시 |
+| AI 비용 발생 시 `@require_usage` 추가 | 사용량 차감 |
+| 페이지네이션 → `validate_pagination()` 사용 | per_page 상한 100 |
+| 사용자 입력 URL → `is_safe_url()` 검증 | SSRF 방지 |
+| 사용자 텍스트 → `is_prompt_injection()` 체크 | 인젝션 방지 |
+| 에러 응답 → 내부 경로/traceback 미노출 | 정보 유출 방지 |
+| 대응 통합 테스트 작성 | `tests/test_*_integration.py` |
+
+## 공통 보안 유틸리티 (`utils/security.py`)
+
+새 보안 검증이 필요할 때 기존 유틸리티 먼저 확인:
+
+```python
+from utils.security import (
+    is_safe_url,           # SSRF 방지 URL 검증
+    validate_pagination,   # 페이지네이션 상한 적용
+    is_prompt_injection,   # 프롬프트 인젝션 탐지
+    sanitize_error_for_client,  # 에러 메시지 정보 유출 방지
+)
+```
+
+중복 구현 금지 — 기존 유틸리티 부족 시 `utils/security.py`에 추가.
