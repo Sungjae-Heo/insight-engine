@@ -99,18 +99,14 @@ def _get_fernet() -> Fernet:
 def encrypt_api_key(api_key: str) -> str:
     """API 키 암호화
 
-    암호화가 비활성화된 경우 원본 반환 (개발 환경용)
+    암호화가 비활성화된 경우 평문 저장을 거부하고 예외 발생
     """
     if not api_key:
         return None
     if not _is_encryption_enabled():
-        logger.debug("암호화 비활성화 상태, 원본 저장")
-        return api_key
-    try:
-        return _get_fernet().encrypt(api_key.encode()).decode()
-    except ConfigurationError:
-        logger.warning("암호화 설정 오류, 원본 저장")
-        return api_key
+        logger.warning("ENCRYPTION_KEY 미설정 — API 키를 평문 저장할 수 없습니다")
+        raise ConfigurationError("API 키 암호화를 위해 ENCRYPTION_KEY 환경변수를 설정하세요")
+    return _get_fernet().encrypt(api_key.encode()).decode()
 
 
 def decrypt_api_key(encrypted_key: str) -> str:
@@ -178,6 +174,7 @@ def require_auth(f: Callable) -> Callable:
     def decorated(*args, **kwargs):
         if not is_supabase_enabled():
             g.user_id = None
+            logger.warning("Supabase 비활성화 — 인증 없이 요청 허용: %s %s", request.method, request.path)
             return f(*args, **kwargs)
 
         token = _extract_bearer_token()
@@ -204,7 +201,10 @@ def optional_auth(f: Callable) -> Callable:
 
         token = _extract_bearer_token()
         if token:
-            _validate_token(token)  # 실패해도 무시 (결과 사용 안 함)
+            result = _validate_token(token)
+            if not result.get('valid'):
+                logger.warning("optional_auth: 토큰 검증 실패 (%s) — 익명 처리: %s",
+                             result.get('code', 'UNKNOWN'), request.path)
 
         return f(*args, **kwargs)
     return decorated
@@ -681,7 +681,7 @@ def is_admin(user_id: str) -> bool:
             logger.info(f"is_admin: g.user_email 발견: {user_email}")
             result = supabase.table('ie_admins') \
                 .select('user_id') \
-                .eq('user_id', user_email) \
+                .eq('email', user_email) \
                 .limit(1) \
                 .execute()
 

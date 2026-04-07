@@ -47,10 +47,7 @@ services:
 
   # Next.js 프론트엔드
   frontend:
-    build:
-      context: .
-      target: final
-    image: insight-engine-frontend:latest
+    image: insight-engine-backend:latest
     container_name: insight-frontend
     restart: unless-stopped
     command: ["node", "frontend/node_modules/.bin/next", "start", "--port", "3000"]

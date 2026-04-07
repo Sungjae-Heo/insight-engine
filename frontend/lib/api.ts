@@ -173,24 +173,44 @@ export async function generateStream(
   onEvent: (event: StreamEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch(`${BASE}/generate-stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-    signal,
-  });
+  const timeoutMs = TIMEOUT_MS['/generate'] ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `HTTP ${res.status}`);
+  // 외부 signal 연동
+  if (signal) {
+    signal.addEventListener('abort', () => controller.abort());
   }
 
-  await parseSSEStream<StreamEvent>(
-    res.body!.getReader(),
-    onEvent,
-    signal,
-    () => onEvent({ type: 'error', error: '네트워크 연결이 끊겼습니다. 다시 시도해주세요.' })
-  );
+  try {
+    const res = await fetch(`${BASE}/generate-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+
+    await parseSSEStream<StreamEvent>(
+      res.body!.getReader(),
+      onEvent,
+      controller.signal,
+      () => onEvent({ type: 'error', error: '네트워크 연결이 끊겼습니다. 다시 시도해주세요.' })
+    );
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`요청 시간이 초과되었습니다 (${Math.round(timeoutMs / 1000)}초). 네트워크 상태를 확인하거나 다시 시도해주세요.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // 배치 생성
@@ -355,24 +375,44 @@ export async function runPipeline(
   onEvent: (event: PipelineEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch(`${BASE}/api/pipeline`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-    signal,
-  });
+  const timeoutMs = TIMEOUT_MS['/api/pipeline'] ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `HTTP ${res.status}`);
+  // 외부 signal 연동
+  if (signal) {
+    signal.addEventListener('abort', () => controller.abort());
   }
 
-  await parseSSEStream<PipelineEvent>(
-    res.body!.getReader(),
-    onEvent,
-    signal,
-    () => onEvent({ type: 'step_error', step: 'network', error: '네트워크 연결이 끊겼습니다.', progress: 0 })
-  );
+  try {
+    const res = await fetch(`${BASE}/api/pipeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+
+    await parseSSEStream<PipelineEvent>(
+      res.body!.getReader(),
+      onEvent,
+      controller.signal,
+      () => onEvent({ type: 'step_error', step: 'network', error: '네트워크 연결이 끊겼습니다.', progress: 0 })
+    );
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`요청 시간이 초과되었습니다 (${Math.round(timeoutMs / 1000)}초). 네트워크 상태를 확인하거나 다시 시도해주세요.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // =============================================
@@ -432,15 +472,29 @@ export async function uploadKnowledge(file: File): Promise<KnowledgeItem> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${BASE}/api/knowledge/upload`, {
-    method: 'POST',
-    body: formData,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `HTTP ${res.status}`);
+  const timeoutMs = TIMEOUT_MS['/api/knowledge/upload'] ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${BASE}/api/knowledge/upload`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`요청 시간이 초과되었습니다 (${Math.round(timeoutMs / 1000)}초).`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 export async function getKnowledgeList(): Promise<{ documents: KnowledgeItem[] }> {
@@ -603,16 +657,30 @@ export async function synthesizeTts(
   voice = 'alloy',
   speed = 1.0,
 ): Promise<Blob> {
-  const res = await fetch(`${BASE}/api/tts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voice, speed }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `TTS 오류: HTTP ${res.status}`);
+  const timeoutMs = TIMEOUT_MS['/api/tts'] ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${BASE}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice, speed }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `TTS 오류: HTTP ${res.status}`);
+    }
+    return res.blob();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`요청 시간이 초과되었습니다 (${Math.round(timeoutMs / 1000)}초).`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.blob();
 }
 
 // === 이벤트 추출 ===

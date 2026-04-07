@@ -43,7 +43,7 @@ export class InlineEditor {
                         <span>취소</span>
                     </button>
                 </div>
-                <textarea class="inline-edit-textarea" spellcheck="false">${this._escapeHtml(originalContent)}</textarea>
+                <textarea class="inline-edit-textarea" spellcheck="false">${this.ui.escapeHtml(originalContent)}</textarea>
                 <div class="inline-edit-preview hidden report-content"></div>
             </div>
         `;
@@ -99,6 +99,7 @@ export class InlineEditor {
 
         // 취소
         cancelBtn.addEventListener('click', () => {
+            while (body.firstChild) body.removeChild(body.firstChild);
             body.innerHTML = originalHtml;
             card.dataset.editing = 'false';
         });
@@ -124,7 +125,7 @@ export class InlineEditor {
             }
         } catch { /* fallback */ }
         // 폴백: 간단한 변환
-        return `<pre>${this._escapeHtml(content)}</pre>`;
+        return `<pre>${this.ui.escapeHtml(content)}</pre>`;
     }
 
     async _syncToCloud(reportId, content, html) {
@@ -150,9 +151,4 @@ export class InlineEditor {
         textarea.style.height = Math.max(200, textarea.scrollHeight) + 'px';
     }
 
-    _escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str || '';
-        return div.innerHTML;
-    }
 }

@@ -4,6 +4,7 @@ LiteLLM을 사용한 다중 AI 프로바이더 지원
 """
 import functools
 import html as html_lib
+import logging
 import os
 import re
 import time
@@ -13,6 +14,8 @@ from datetime import datetime
 from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 from zoneinfo import ZoneInfo
 from flask import current_app
+
+logger = logging.getLogger(__name__)
 
 
 @functools.lru_cache(maxsize=1)
@@ -109,7 +112,8 @@ def format_transcript_with_timestamps(segments: list) -> str:
     try:
         from utils.timestamp_utils import format_segments_for_prompt
         return format_segments_for_prompt(segments)
-    except Exception:
+    except Exception as e:
+        logger.warning("타임스탬프 포매팅 실패: %s", e)
         return ""
 
 
@@ -396,6 +400,7 @@ def create_content(content: str, model: str, style_prompt: Optional[str] = None,
 
         # GLM 모델은 동시성 제한으로 순차 처리 (락은 호출 시만, sleep은 밖에서)
         if is_glm:
+            response = None
             last_error = None
             for attempt in range(GLM_RETRY_COUNT):
                 with _glm_lock:
@@ -407,15 +412,17 @@ def create_content(content: str, model: str, style_prompt: Optional[str] = None,
                         last_error = e
                         error_str = str(e)
                         if '1302' not in error_str or attempt >= GLM_RETRY_COUNT - 1:
-                            raise
+                            break
                         current_app.logger.warning(
                             f"GLM 동시성 에러, {GLM_RETRY_DELAY}초 후 재시도 "
                             f"({attempt + 1}/{GLM_RETRY_COUNT}): {model}"
                         )
-                # sleep은 락 밖에서 (다른 요청 블로킹 방지)
+                if response is not None:
+                    break
                 time.sleep(GLM_RETRY_DELAY)
-            else:
-                raise last_error
+
+            if response is None:
+                raise last_error or RuntimeError(f"GLM 호출 실패: {model}")
         else:
             response = _get_completion()(**completion_kwargs)
 
@@ -465,7 +472,10 @@ def create_content(content: str, model: str, style_prompt: Optional[str] = None,
 
 def create_content_stream(content: str, model: str, style_prompt: Optional[str] = None,
                           modifiers: Optional[Dict[str, Any]] = None, style_id: Optional[str] = None,
-                          detail_level: Optional[str] = None) -> Generator[Optional[str], None, None]:
+                          detail_level: Optional[str] = None,
+                          rag_context: Optional[str] = None,
+                          web_context: Optional[str] = None,
+                          memory_context: Optional[str] = None) -> Generator[Optional[str], None, None]:
     """
     LiteLLM 스트리밍으로 AI 콘텐츠를 생성합니다.
     각 토큰을 yield하고, 마지막에 None을 yield합니다.
@@ -474,7 +484,9 @@ def create_content_stream(content: str, model: str, style_prompt: Optional[str] 
     Yields:
         str: 토큰 텍스트 또는 None(종료)
     """
-    prompt = _build_prompt(content, style_prompt, modifiers, detail_level=detail_level)
+    prompt = _build_prompt(content, style_prompt, modifiers,
+                          rag_context=rag_context, web_context=web_context,
+                          memory_context=memory_context, detail_level=detail_level)
     is_glm = model.startswith("zhipuai/")
 
     # GLM 모델: 스트리밍 미지원, 일반 호출 후 전체 yield

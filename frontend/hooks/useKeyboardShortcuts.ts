@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 
 /** 단축키 정의 */
@@ -31,6 +31,9 @@ export function useKeyboardShortcuts() {
     { key: '2', alt: true, label: '캘린더 뷰', category: '탐색', action: () => setActiveView('calendar') },
   ];
 
+  const shortcutsRef = useRef(shortcuts);
+  shortcutsRef.current = shortcuts;
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // 입력 필드에서는 단축키 무시
@@ -39,7 +42,7 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      for (const s of shortcuts) {
+      for (const s of shortcutsRef.current) {
         const ctrlMatch = s.ctrl ? (e.ctrlKey || e.metaKey) : !(e.ctrlKey || e.metaKey);
         const shiftMatch = s.shift ? e.shiftKey : !e.shiftKey;
         const altMatch = s.alt ? e.altKey : !e.altKey;
@@ -54,7 +57,7 @@ export function useKeyboardShortcuts() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [shortcuts]);
+  }, []);
 
   return shortcuts;
 }

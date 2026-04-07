@@ -52,20 +52,21 @@ jobs:
 
       - name: 단위 테스트 실행
         run: |
+          pip install pytest-cov
           python -m pytest tests/ \
             -v \
             --ignore=tests/e2e \
             --tb=short \
             -x \
             --timeout=60 \
+            --cov=. \
+            --cov-report=xml \
             -p no:warnings \
             2>&1 | head -500
 
       - name: 커버리지 업로드
         if: github.ref == 'refs/heads/main'
-        run: |
-          pip install coverage pytest-cov
-          python -m pytest tests/ --ignore=tests/e2e --cov=. --cov-report=xml -q
+        run: echo "Coverage XML generated in previous step"
         continue-on-error: true
 
   # ── 프론트엔드 테스트 ─────────────────────────────────────────────────────────

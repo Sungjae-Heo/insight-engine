@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useMemo, useCallback, useReducer } from 'react';
+import { memo, useState, useMemo, useCallback, useReducer, useRef, useEffect } from 'react';
 import {
   Copy, Check, ChevronDown, ChevronUp, MoreHorizontal, Trash2,
   FileText, Code, Brain, Download, Share2, Printer,
@@ -128,6 +128,13 @@ function panelReducer(state: PanelState, action: PanelAction): PanelState {
 
 const ResultCard = memo(function ResultCard({ report, searchQuery, mcpPlugins, onSchedule, viewMode = 'full', onExpandToFull }: ResultCardProps) {
   const [panel, dispatch] = useReducer(panelReducer, panelInitial);
+  const notebookPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (notebookPollRef.current) clearInterval(notebookPollRef.current);
+    };
+  }, []);
   const { collapsed, hasExpanded, copiedField, chatOpen, showTranscript, audioBlob, ttsLoading, eventOpen, eventLoading, extractedEvents, eventSummary, rewriteOpen } = panel;
 
   // 간편 setter
@@ -256,14 +263,13 @@ th{background:#F9FAFB}</style></head><body>${sanitizeHtml(report.html || report.
       toast.success(`NotebookLM ${contentType} 생성 시작`);
 
       // 폴링
+      if (notebookPollRef.current) clearInterval(notebookPollRef.current);
       const poll = setInterval(async () => {
         try {
           const status = await notebookLmStatus(res.artifact_id);
           if (status.status === 'completed' || status.status === 'failed') {
             clearInterval(poll);
-            const updated = (report.notebooklm?.artifacts ?? []).map(a =>
-              a.artifact_id === res.artifact_id ? { ...a, status: status.status as 'completed' | 'failed' } : a
-            );
+            notebookPollRef.current = null;
             // 새로 추가된 artifact도 반영
             const all = [...existing, { ...artifact, status: status.status as 'completed' | 'failed' }];
             updateReport(report.id, { notebooklm: { artifacts: all } });
@@ -272,8 +278,10 @@ th{background:#F9FAFB}</style></head><body>${sanitizeHtml(report.html || report.
           }
         } catch {
           clearInterval(poll);
+          notebookPollRef.current = null;
         }
       }, 5000);
+      notebookPollRef.current = poll;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'NotebookLM 생성에 실패했습니다.');
     }

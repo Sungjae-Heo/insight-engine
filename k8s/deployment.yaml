@@ -11,7 +11,7 @@ metadata:
     app: insight-backend
     version: v1
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: insight-backend
@@ -221,6 +221,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  # NOTE: replicas > 1 사용 시 ReadWriteMany 필요 (NFS/EFS 등 공유 스토리지 필수)
   resources:
     requests:
       storage: 20Gi

@@ -18,10 +18,13 @@ export class VideoSelectionModal {
     _createModal() {
         this.modal = document.createElement('div');
         this.modal.className = 'video-modal-overlay';
+        this.modal.setAttribute('role', 'dialog');
+        this.modal.setAttribute('aria-modal', 'true');
+        this.modal.setAttribute('aria-labelledby', 'video-modal-title');
         this.modal.innerHTML = `
             <div class="video-modal">
                 <div class="video-modal-header">
-                    <h3 class="video-modal-title">
+                    <h3 class="video-modal-title" id="video-modal-title">
                         <span class="material-symbols-outlined">playlist_play</span>
                         <span class="video-modal-title-text">영상 목록</span>
                     </h3>
@@ -84,9 +87,14 @@ export class VideoSelectionModal {
 
         this._renderList(videos, options);
         this.modal.classList.add('active');
+
+        this._previousFocus = document.activeElement;
+        const firstFocusable = this.modal.querySelector('button, input, [tabindex]');
+        if (firstFocusable) firstFocusable.focus();
     }
 
     close() {
+        if (this._previousFocus) this._previousFocus.focus();
         this.modal.classList.remove('active');
     }
 

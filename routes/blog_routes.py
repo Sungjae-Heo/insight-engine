@@ -17,6 +17,7 @@
 import concurrent.futures
 import html as html_lib
 import json
+import re
 import time
 import uuid
 
@@ -200,6 +201,13 @@ def _validate_modifiers(modifiers):
     return validated, None
 
 
+_INJECTION_PATTERNS = re.compile(
+    r'(이전\s*지시를?\s*무시|ignore\s+previous\s+instructions?|'
+    r'system\s*prompt|you\s+are\s+now|forget\s+(everything|all)|'
+    r'disregard\s+(all|previous)|override\s+instructions?)',
+    re.IGNORECASE
+)
+
 def _validate_custom_prompt(custom_prompt):
     """customPrompt 파라미터의 유효성을 검증합니다.
 
@@ -212,8 +220,10 @@ def _validate_custom_prompt(custom_prompt):
     if not isinstance(custom_prompt, str):
         return None, 'customPrompt는 문자열이어야 합니다.'
 
-    # 길이 제한 (2000자)
-    return custom_prompt.strip()[:2000], None
+    trimmed = custom_prompt.strip()[:2000]
+    if _INJECTION_PATTERNS.search(trimmed):
+        return None, '허용되지 않는 표현이 포함되어 있습니다.'
+    return trimmed, None
 
 
 # ── 생성 헬퍼 (분리된 모듈에서 import) ──────────────────────────
