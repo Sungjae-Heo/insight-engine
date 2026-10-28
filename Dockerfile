@@ -2,15 +2,15 @@
 # 멀티스테이지 빌드: Next.js 프론트엔드 + Flask 백엔드
 
 # ── 스테이지 1: Next.js 빌드 ──────────────────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
+FROM node:22.23.4-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 COPY frontend/ ./
-RUN npm run build
+RUN npm run build && npm prune --omit=dev
 
 # ── 스테이지 2: Python 의존성 ──────────────────────────────────────────────────
 FROM python:3.11-slim AS python-deps
@@ -26,7 +26,10 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-# ── 스테이지 3: 최종 이미지 ───────────────────────────────────────────────────
+# ── 스테이지 3: 수정된 Node.js 런타임 ────────────────────────────────────────
+FROM node:22.23.4-slim AS node-runtime
+
+# ── 스테이지 4: 최종 이미지 ───────────────────────────────────────────────────
 FROM python:3.11-slim AS final
 
 WORKDIR /app
@@ -40,10 +43,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=python-deps /usr/local/bin /usr/local/bin
 
-# Node.js 설치 (Next.js 서버 실행용)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Next.js 서버용 보안 수정 Node.js 런타임
+COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 
 # 애플리케이션 소스 복사
 COPY . .
